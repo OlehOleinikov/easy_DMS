@@ -257,6 +257,6 @@ def get_pdf_data(file) -> str:
     splitted_lines_pdf = pdf_text.split('\n')
     clean_string = [str(x).strip() for x in splitted_lines_pdf if len(x.strip()) > 2]
     data = '\n'.join(clean_string)
-    with open(f"Output_{file}.txt", "w") as text_file:
-        text_file.write(data)
+    # with open(f"Output_{file}.txt", "w") as text_file:
+    #     text_file.write(data)
     return data
