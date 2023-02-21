@@ -1,3 +1,5 @@
+"""Converter PDF to text"""
+
 from io import StringIO
 import re
 
