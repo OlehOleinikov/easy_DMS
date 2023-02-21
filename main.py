@@ -5,9 +5,11 @@ from rich.tree import Tree
 from rich.console import Console
 from rich.table import Table
 
-from converter_pdf import PersonProfile, get_pdf_data
+from converter_pdf import PersonProfile, get_pdf_data, show_pdf_text_localization
 from ms_word_editor import DocEditor
 from defines import melody_run, intro_ascii
+
+DEBUG_MODE = True
 
 melody = melody_run()
 person_cards = []
@@ -36,6 +38,9 @@ rprint('[#FF00FF]Converting...\n')
 for idx, name in enumerate(files_in_dir):
     status = False
     try:
+        if DEBUG_MODE:
+            show_pdf_text_localization(name)
+
         data = get_pdf_data(name)
         cur_person = PersonProfile(data, name)
         person_cards.append(cur_person)

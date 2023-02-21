@@ -9,6 +9,10 @@ from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfparser import PDFParser
 from image_from_pdf import get_image
 
+from pdfminer.converter import PDFPageAggregator
+from pdfminer.layout import LAParams, LTTextBox
+from rich import print as rprint
+
 
 class DocumentId:
     blank_number = None
@@ -37,13 +41,14 @@ class DocumentId:
             dates_list.append(cur_date.group())
         if len(dates_list) == 1:
             self.date_created = dates_list[0]
-            spec_status = re.search(r"Документ визнано недійсним|необмежений", text)
-            self.expired_status = spec_status.group(0) if spec_status else None
 
         if len(dates_list) > 1:
             dates_list = sorted(dates_list, key=lambda date_text: date_text[-4:])
             self.date_created = dates_list[0]
             self.date_expired = dates_list[1]
+
+        spec_status = re.search(r"Документ визнано недійсним|необмежений", text)
+        self.expired_status = spec_status.group(0) if spec_status else None
 
     def find_office(self, text):
         office_lines = []
@@ -166,8 +171,10 @@ class PersonProfile:
             self.phone = phone
 
         # PASS INTERNAL:
-        pass_int = re.search(r"Паспорт громадянина України\n([.\s\S]*)Паспорт\(и\) громадянина "
-                             r"України для виїзду за кордон", data)
+        pass_int = re.search(r"Паспорт громадянина України\n([.\s\S]*)Свідоцтво про народження", data)
+        if not pass_int:
+            pass_int = re.search(r"Паспорт громадянина України\n([.\s\S]*)Паспорт\(и\) громадянина "
+                                 r"України для виїзду за кордон", data)
         # додати \n(\S{2}\d{6})\n для старого формату
         if pass_int:
             text_int = pass_int.group(1)
@@ -260,3 +267,32 @@ def get_pdf_data(file) -> str:
     # with open(f"Output_{file}.txt", "w") as text_file:
     #     text_file.write(data)
     return data
+
+
+def show_pdf_text_localization(file):
+    fp = open(file, 'rb')
+    rsrcmgr = PDFResourceManager()
+    laparams = LAParams()
+    device = PDFPageAggregator(rsrcmgr, laparams=laparams)
+    interpreter = PDFPageInterpreter(rsrcmgr, device)
+    pages = PDFPage.get_pages(fp)
+
+    for page in pages:
+        interpreter.process_page(page)
+        layout = device.get_result()
+        for l in layout:
+            if isinstance(l, LTTextBox):
+                x_min, y_max, y_min, x_max, text = l.bbox[0], l.bbox[3], l.bbox[1], l.bbox[2],  l.get_text()
+                if len(text) > 2:
+
+                    res_text = []
+                    for part in text.split('\n'):
+                        if len(part) > 2:
+                            res_text.append(part)
+                    res_text = '\n'.join(res_text)
+
+                    if res_text:
+                        print('--------------------------------------------')
+                        print(f'height: {round(y_min)}-{round(y_max)} (size: {round(abs(y_min - y_max))})')
+                        print(f'width:  {round(x_min)}-{round(x_max)} (size: {round(abs(x_min - x_max))})')
+                        rprint('[red]' + res_text + '[/red]')

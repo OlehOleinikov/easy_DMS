@@ -1,26 +1,32 @@
+"""
+Отримання байтового представлення першого зображення PDF документу.
+З можливістю роботи з іншими зображеннями на інших сторінках
+"""
 import fitz
 import io
 
 
 def get_image(file_name):
+    """
+    Отримання першого зображення PDF документу у байтовому представленні (RGB)
+    """
     file_path = file_name
     pdf_file = fitz.open(file_path)
 
-    #finding number of pages in the pdf
+    # кількість сторінок у файлі
     number_of_pages = len(pdf_file)
-
-    #iterating through each page in the pdf
+    # проходження по кожній сторінці pdf
     for current_page_index in range(number_of_pages):
-        #iterating through each image in every page of PDF
+        # проходження по кожній сторінці
         for img_index,img in enumerate(pdf_file.get_page_images(current_page_index)):
             xref = img[0]
             image = fitz.Pixmap(pdf_file, xref)
-            #if it is a is GRAY or RGB image
+            # для зображень з кольоровою схемою GRAY та RGB
             if image.n < 5:
                 stream = image.pil_tobytes(format='PNG')
                 memory_file = io.BytesIO(stream)
                 return memory_file
-            #if it is CMYK: convert to RGB first
+            # для кольорової схеми  CMYK: перетворення на  RGB
             else:
                 new_image = fitz.Pixmap(fitz.csRGB, image)
                 memory_file = io.BytesIO()
