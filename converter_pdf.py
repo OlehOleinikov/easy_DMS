@@ -2,24 +2,11 @@
 Converter PDF to text
 add text to branch
 """
-
-from io import StringIO
 import re
-
-from pdfminer.converter import TextConverter
-from pdfminer.layout import LAParams
-from pdfminer.pdfdocument import PDFDocument
-from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-from pdfminer.pdfpage import PDFPage
-from pdfminer.pdfparser import PDFParser
 from image_from_pdf import get_image
 
-from pdfminer.converter import PDFPageAggregator
-from pdfminer.layout import LAParams, LTTextBox
-from rich import print as rprint
 
-
-class DocumentId:
+class _DocumentId:
     blank_number = None
     date_created = None
     date_expired = None
@@ -231,7 +218,6 @@ class PersonProfile:
         except Exception:
             self.image = None
 
-
     def __str__(self):
         desc_text = f'{self.name_full}, {self.dob} р.н.:' \
                 f'\n\tМісце народження: {self.pob}' \
@@ -252,52 +238,3 @@ class PersonProfile:
             desc_text += pass_ext_print
         return desc_text
 
-
-def get_pdf_data(file) -> str:
-    """Отримання даних ПДФ файлу у вигляді стрінги з розділювачами нового рядку (очищення від 1-2 символьних рідків)"""
-    output_string = StringIO()
-    with open(file, 'rb') as in_file:
-        parser = PDFParser(in_file)
-        doc = PDFDocument(parser)
-        rsrcmgr = PDFResourceManager()
-        device = TextConverter(rsrcmgr, output_string, laparams=LAParams())
-        interpreter = PDFPageInterpreter(rsrcmgr, device)
-        for page in PDFPage.create_pages(doc):
-            interpreter.process_page(page)
-
-    pdf_text = output_string.getvalue()
-    splitted_lines_pdf = pdf_text.split('\n')
-    clean_string = [str(x).strip() for x in splitted_lines_pdf if len(x.strip()) > 2]
-    data = '\n'.join(clean_string)
-    # with open(f"Output_{file}.txt", "w") as text_file:
-    #     text_file.write(data)
-    return data
-
-
-def show_pdf_text_localization(file):
-    fp = open(file, 'rb')
-    rsrcmgr = PDFResourceManager()
-    laparams = LAParams()
-    device = PDFPageAggregator(rsrcmgr, laparams=laparams)
-    interpreter = PDFPageInterpreter(rsrcmgr, device)
-    pages = PDFPage.get_pages(fp)
-
-    for page in pages:
-        interpreter.process_page(page)
-        layout = device.get_result()
-        for l in layout:
-            if isinstance(l, LTTextBox):
-                x_min, y_max, y_min, x_max, text = l.bbox[0], l.bbox[3], l.bbox[1], l.bbox[2],  l.get_text()
-                if len(text) > 2:
-
-                    res_text = []
-                    for part in text.split('\n'):
-                        if len(part) > 2:
-                            res_text.append(part)
-                    res_text = '\n'.join(res_text)
-
-                    if res_text:
-                        print('--------------------------------------------')
-                        print(f'height: {round(y_min)}-{round(y_max)} (size: {round(abs(y_min - y_max))})')
-                        print(f'width:  {round(x_min)}-{round(x_max)} (size: {round(abs(x_min - x_max))})')
-                        rprint('[red]' + res_text + '[/red]')
