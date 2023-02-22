@@ -5,7 +5,7 @@ from rich.tree import Tree
 from rich.console import Console
 from rich.table import Table
 
-from converter_pdf import PersonProfile, get_pdf_data, show_pdf_text_localization
+from converter_pdf import PersonProfile, get_pdf_data, get_ocr, show_pdf_text_localization, get_pdf_tabula
 from ms_word_editor import DocEditor
 from defines import melody_run, intro_ascii
 
@@ -40,6 +40,8 @@ for idx, name in enumerate(files_in_dir):
     try:
         if DEBUG_MODE:
             show_pdf_text_localization(name)
+            print(get_pdf_tabula(name))
+
 
         data = get_pdf_data(name)
         cur_person = PersonProfile(data, name)
