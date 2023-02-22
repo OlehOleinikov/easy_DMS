@@ -133,3 +133,6 @@ dmypy.json
 /datasets
 *.pdf
 *.docx
+*.png
+*.jpg
+*.jpeg
