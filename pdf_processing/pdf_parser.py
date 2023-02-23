@@ -2,6 +2,7 @@ import warnings
 import io
 import re
 from rich import print as rprint
+from typing import Tuple
 
 import numpy as np
 import cv2
@@ -21,7 +22,7 @@ pytesseract.pytesseract.tesseract_cmd = r"full path to the exe file"
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
-def ocr_pdf_to_dict(file:str) -> dict:
+def ocr_pdf_to_dict(file: str) -> Tuple[dict, dict]:
     """
     Отримання змісту PDF у представленні словника з розпізнаними словами та їх положеннями на сторінці
     """
@@ -29,38 +30,41 @@ def ocr_pdf_to_dict(file:str) -> dict:
     return _compute_ocr(image_data)
 
 
-def _compute_ocr(parsed_image: bytes, write_test_file=False) -> dict:
+def _compute_ocr(parsed_image: bytes, write_test_file=False) -> Tuple[dict, dict]:
     """
     Розпізнання зображення (попередньо вилученого з файлу та перетвореного у байтове представлення),
     формування словника з розпізнаним текстом та його координатами
+
+    :returns: два словника (розпізнаний української, розпізнаний англійською)
     """
     nparr = np.fromstring(parsed_image, np.uint8)  # формування масиву зображення
     img_np = cv2.imdecode(nparr, -1)
-    ocr_result_dict = pytesseract.image_to_data(img_np, output_type=Output.DICT, lang='ukr')
+    ocr_ukr_dict = pytesseract.image_to_data(img_np, output_type=Output.DICT, lang='ukr')
+    ocr_eng_dict = pytesseract.image_to_data(img_np, output_type=Output.DICT, lang='eng')
 
     # Вивід у консоль, якщо треба перевірити правильність розпізнання
     if write_test_file:
         test_pattern = 'Номер|Паспорт|Дата|Прізвище|Стать|УНЗР|РНОКПП|Дійсний|Орган|Місце|народження|проживання' \
                        '|Ім.я|батькові|Телефон'
 
-        n_boxes = len(ocr_result_dict['text'])
+        n_boxes = len(ocr_ukr_dict['text'])
         for i in range(n_boxes):
-            if int(ocr_result_dict['conf'][i]) > 60:
-                if re.match(test_pattern, ocr_result_dict['text'][i]):
-                    (x, y, w, h) = (ocr_result_dict['left'][i],
-                                    ocr_result_dict['top'][i],
-                                    ocr_result_dict['width'][i],
-                                    ocr_result_dict['height'][i])
+            if int(ocr_ukr_dict['conf'][i]) > 60:
+                if re.match(test_pattern, ocr_ukr_dict['text'][i]):
+                    (x, y, w, h) = (ocr_ukr_dict['left'][i],
+                                    ocr_ukr_dict['top'][i],
+                                    ocr_ukr_dict['width'][i],
+                                    ocr_ukr_dict['height'][i])
                     img_np = cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
                     print('Розпізнаний текст:')
-                    print(f'\nТЕКСТ: {ocr_result_dict["text"][i]}'
+                    print(f'\nТЕКСТ: {ocr_ukr_dict["text"][i]}'
                           f'\n\tПолож. X: {x}'
                           f'\n\tПолож. Y: {y}'
                           f'\n\tШирина  : {w}'
                           f'\n\tВисота  : {h}')
         # Збереження зображення з виділенням знайдених ключових слів
         cv2.imwrite('OK2.png', img_np)
-    return ocr_result_dict
+    return ocr_ukr_dict, ocr_eng_dict
 
 
 def _convert_pdf_to_image(file: str) -> bytes:

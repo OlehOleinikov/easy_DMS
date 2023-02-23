@@ -8,6 +8,16 @@ from typing import Union
 
 OFFSET = 10  # можлива похибка при визначенні меж боксу слова (у пікселях)
 ROW_HEIGHT = (68+2)  # типова висота рядку у пікселях (для крокування)
+BLANK_MIN = 355
+BLANK_MAX = 635
+CREATED_MIN = 923
+CREATED_MAX = 1202
+EXPIRED_MIN = 1490
+OFFICE_TIT_X = 183
+OFFICE_VAL_X = 465
+PAGE_HEIGHT = 2500
+PAGE_WIDTH = 1800
+
 
 
 class DocumentId:
@@ -18,33 +28,12 @@ class DocumentId:
     expired_status = None
     non_office_starts = ['Номер', 'Дата', 'Дійсний', 'необмежений', 'Документ', 'Паспорт(и)']
 
-    def __init__(self, text: str):
-        self.find_blank(text)
-        self.find_dates(text)
-        self.find_office(text)
-        assert self.blank_number is not None
-
-    def find_blank(self, text):
-        blank_search = re.search(r"Номер ([\S]*)\n", text)
-        if not blank_search:
-            blank_search = re.search(r"\n(\S{2}\d{6})\n", text)
-        self.blank_number = blank_search.group(1) if blank_search else None
-
-    def find_dates(self, text):
-        date_occur = re.finditer(r"\d{2}.\d{2}.\d{4}", text)
-        dates_list = []
-        for cur_date in date_occur:
-            dates_list.append(cur_date.group())
-        if len(dates_list) == 1:
-            self.date_created = dates_list[0]
-
-        if len(dates_list) > 1:
-            dates_list = sorted(dates_list, key=lambda date_text: date_text[-4:])
-            self.date_created = dates_list[0]
-            self.date_expired = dates_list[1]
-
-        spec_status = re.search(r"Документ визнано недійсним|необмежений", text)
-        self.expired_status = spec_status.group(0) if spec_status else None
+    def __init__(self, blank, date1, date2, status, office):
+        self.blank_number = blank
+        self.date_created = date1
+        self.date_expired = date2
+        self.pass_office = office
+        self.expired_status = status
 
     def find_office(self, text):
         office_lines = []
@@ -82,8 +71,9 @@ class PersonProfile:
 
     address_types = ['Район', "Область"]
 
-    def __init__(self, data: dict, person_photo: io.BytesIO):
+    def __init__(self, data: dict, data_eng: dict, person_photo: io.BytesIO):
         self.data = data
+        self.data_eng = data_eng
         self.inline_title = None
         self.inline_value = None
         self.words = data.get('text', [])
@@ -105,139 +95,9 @@ class PersonProfile:
         self.phone = self._get_phone()
         self.pob = self._get_place_birth()
         self.address = self._get_place_live()
-
-
-
-
-        # splitted_lines_pdf = data.split('\n')
-        # cleaned_strings = [str(x).strip() for x in splitted_lines_pdf if len(x.strip()) > 2]
-        # data = '\n'.join(cleaned_strings)
-        #
-        # # assert re.match('ОСОБОВА КАРТКА', data) is not None, 'Відсутній заголовок "ОСОБОВА КАРТКА", ' \
-        # #                                                      'можливо файл не являється карткою ДМС'
-        #
-        # # ПРІЗВИЩЕ ІМ'Я ПОБАТЬКОВІ:
-        # regex_half_name = r"Державна міграційна служба України\n([А-ЯІЇЄ`’']{2,})\n([А-ЯІЇЄ`’']{2,})"
-        # regex_full_name = r"([А-ЯІЇЄ`’']{2,})\n([А-ЯІЇЄ`’']{2,})\n([А-ЯІЇЄ`’']{2,}\n)|" \
-        #                   r"Прізвище\n([А-ЯІЇЄ`’']{2,})\nІм.я\n([А-ЯІЇЄ`’']{2,})\nПо батькові\n([А-ЯІЇЄ`’']{2,})\n|" \
-        #                   r"([А-ЯІЇЄ`’']{2,})\nПр.звище\n([А-ЯІЇЄ`’']{2,})\n.м.я\nПо батькові\n([А-ЯІЇЄ`’']{2,})"
-        # name_search = re.search(regex_full_name, data)
-        # if not name_search:
-        #     name_search = re.search(regex_half_name, data)
-        # if not name_search:
-        #     raise ImportError('Не виявлено співпадінь маски ПІБ')
-        # name_lines = [x for x in name_search.groups() if x is not None]
-        # name_full_str = ' '.join(name_lines)
-        # self.name_full = re.sub(r' +|\n', ' ', name_full_str)
-        #
-        # # ДАТА НАРОДЖЕННЯ:
-        # dob_res = re.search(r'Дата народження[\s:-]{0,2}(\d{2}.\d{2}.\d{4})', data)
-        # self.dob = dob_res.group(1) if dob_res else self.dob
-        # assert self.dob is not None, "Не виявлено дату народження"
-        #
-        # # УНЗР
-        # uni_res = re.search(r'\n(\d{13})\n', data)
-        # self.code_uni = uni_res.group(1) if uni_res else self.code_uni
-        #
-        # # РНОКПП
-        # tax_res = re.search(r'\n(\d{10})\n', data)
-        # self.code_tax = tax_res.group(1) if tax_res else self.code_tax
-        #
-        # # МІСЦЕ НАРОДЖЕННЯ / АДРЕСА
-        # places_res = re.search(r"перебування\n([\s\S]*)UA\d{17}", data)
-        # if not places_res:
-        #     places_res = re.search(r"перебування\n([\s\S] * )Паспорт\n", data)
-        #
-        # if places_res:
-        #     places_str = places_res.group(1)
-        #     live_from = re.search(r"\d{8}$", places_str)
-        #     if live_from:
-        #         lf = live_from.group(0)
-        #         self.live_from = lf[:2] + '.' + lf[2:5] + '.' + lf[-4:]
-        #     locations = []
-        #     for p in places_str.split('УКРАЇНА'):
-        #         pure_search = re.search(r"(\w[\s\S]*\w)", p)
-        #         if pure_search:
-        #             cur_location = pure_search.group(1)
-        #             words = re.finditer(r"[\S]*", cur_location)
-        #             if words:
-        #                 for w in words:
-        #                     cur_location = cur_location.replace(w.group(), w.group().title())
-        #                     cur_location = cur_location.replace("\n", ' ')
-        #                     for adr_type in self.address_types:
-        #                         cur_location = cur_location.replace(adr_type, adr_type.lower())
-        #
-        #             words = re.finditer(r"[\S]*\. ", cur_location)
-        #             if words:
-        #                 for w in words:
-        #                     cur_location = cur_location.replace(w.group(), w.group().lower())
-        #                     cur_location = cur_location.replace("\n", ' ')
-        #                     for adr_type in self.address_types:
-        #                         cur_location = cur_location.replace(adr_type, adr_type.lower())
-        #
-        #             locations.append(cur_location)
-        #     if locations:
-        #         self.address = locations[-1]
-        #         self.address = re.sub(r" \d{8}$", '', self.address)
-        #         self.pob = locations[0]
-        #
-        # # ТЕЛЕФОН
-        # phone_res = re.search(r"\n(0\d{9}|\+38\d{10}|38\d{10}|8\d{10})\n", data)
-        # if phone_res:
-        #     phone = phone_res.group(1)
-        #     phone = phone[1:] if phone.startswith('+') else phone
-        #     phone = '38' + phone if len(phone) == 10 else phone
-        #     self.phone = phone
-        #
-        # # PASS INTERNAL:
-        # pass_int = re.search(r"Паспорт громадянина України\n([.\s\S]*)Свідоцтво про народження", data)
-        # if not pass_int:
-        #     pass_int = re.search(r"Паспорт громадянина України\n([.\s\S]*)Паспорт\(и\) громадянина "
-        #                          r"України для виїзду за кордон", data)
-        # # додати \n(\S{2}\d{6})\n для старого формату
-        # if pass_int:
-        #     text_int = pass_int.group(1)
-        #     res_search = re.finditer('Номер', text_int)
-        #     starts_list_occur = []
-        #     for match in res_search:
-        #         starts_list_occur.append(match.start())
-        #     if starts_list_occur:
-        #         starts_list_occur.append(len(text_int))
-        #     pass_ranges = []
-        #     for el_num in range(len(starts_list_occur)):
-        #         cur_el = starts_list_occur[el_num]
-        #         if not cur_el == starts_list_occur[-1]:
-        #             pass_ranges.append([cur_el, starts_list_occur[el_num + 1]])
-        #     for pass_range in pass_ranges:
-        #         try:
-        #             pass_inst = DocumentId(text_int[pass_range[0]: pass_range[1]])
-        #             if type(pass_inst) == DocumentId:
-        #                 self.pass_internal.append(pass_inst)
-        #         except Exception:
-        #             pass
-        #
-        # # PASS EXTERNAL:
-        # pass_ext = re.search(r"Паспорт\(и\) громадянина України для виїзду за кордон\n([.\s\S]*)Запит здійснив", data)
-        # if pass_ext:
-        #     text_ext = pass_ext.group(1)
-        #     res_search = re.finditer('Номер', text_ext)
-        #     starts_list_occur = []
-        #     for match in res_search:
-        #         starts_list_occur.append(match.start())
-        #     if starts_list_occur:
-        #         starts_list_occur.append(len(text_ext))
-        #     pass_ranges = []
-        #     for el_num in range(len(starts_list_occur)):
-        #         cur_el = starts_list_occur[el_num]
-        #         if not cur_el == starts_list_occur[-1]:
-        #             pass_ranges.append([cur_el, starts_list_occur[el_num + 1]])
-        #     for pass_range in pass_ranges:
-        #         try:
-        #             pass_inst = DocumentId(text_ext[pass_range[0]: pass_range[1]])
-        #             if type(pass_inst) == DocumentId:
-        #                 self.pass_external.append(pass_inst)
-        #         except Exception:
-        #             pass
+        self._get_cert_birth()
+        self._get_pass_int()
+        self._get_pass_ext()
 
         # PHOTO
         self.image = person_photo if person_photo else None
@@ -455,6 +315,8 @@ class PersonProfile:
         text_line = re.sub(r' +|\n', ' ', text_line)
         text_line = re.sub(r'УКРАЇНА, ', '', text_line)
         text_line = re.sub(r'УКРАЇНА ', '', text_line)
+
+        # Всі слова кемелкейсом:
         words = re.finditer(r"([\S`’']{2,})| ([\S`’']{2,})", text_line)
         if words:
             for w in words:
@@ -463,7 +325,8 @@ class PersonProfile:
                 for adr_type in address_types:
                     text_line = text_line.replace(adr_type, adr_type.lower())
 
-        words = re.finditer(r"[ ]([А-Я]{1}[а-я]{1,}[А-Я]{1,})[ ,]", text_line)
+        # Виправлення неправильно застосування кемелкейсу для однокореневих слів:
+        words = re.finditer(r"[ ]([А-ЯІЇЙ`’'\-]{1}[а-яіїй`’'\-]{1,}[А-ЯІЇЙ`’'\-]{1,})[ ,]", text_line)
         if words:
             for w in words:
                 text_line = text_line.replace(w.group(), w.group().title())
@@ -471,14 +334,19 @@ class PersonProfile:
                 for adr_type in address_types:
                     text_line = text_line.replace(adr_type, adr_type.lower())
 
+        # Скорочення (буд.|кв.|...) всі літери малі:
         words = re.finditer(r"[\S]*\. ", text_line)
         if words:
             for w in words:
                 text_line = text_line.replace(w.group(), w.group().lower())
+
+        # Видалення унікального номеру території
         text_line = re.sub(r"..\d{17}", '', text_line)
         text_line = text_line.strip()
+        # Видалення дати реєстрації:
         text_line = re.sub(r"\d{8}", '', text_line)
         text_line = text_line.strip()
+        # Виправлення пунктуації:
         text_line = text_line.replace(' кв. ', ", кв.")
         text_line = text_line.replace(' буд. ', ", ")
         text_line = text_line.replace(' вул. ', ", вул.")
@@ -491,6 +359,8 @@ class PersonProfile:
         next_section_y_loc = None
         place_occur = []  # Позиції у яких зустрічається слово "народження"
         living_occur = []  # Позиції у яких зустрічається слово "Місце"
+
+        # Визначення лінії (позиції по вертикалі) з якої починається запис адреси (заголовок):
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             place_word_present = re.search(r'(Місце)', t)
             if place_word_present:
@@ -504,9 +374,11 @@ class PersonProfile:
                     if abs(p-liv) <= ROW_HEIGHT + OFFSET:  # Місце, де слова "Місце" та "проживання" - поруч
                         adr_title_y_loc = liv if liv <= p else p  # Розташування визначається за вищим словом (Місце)
 
+        # Якщо не знайдено заголовок - припинення пошуку:
         if not adr_title_y_loc:
             return None
 
+        # Пошук початку наступної секції (для обмеження пошуку поточної адреси) - заголовок з відступом inline_title:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if (y > adr_title_y_loc) and ((self.inline_title - OFFSET) < x < (self.inline_title + OFFSET)):
                 t = str(t)
@@ -516,6 +388,7 @@ class PersonProfile:
         if next_section_y_loc is None:
             return None
 
+        # Накопичення слів у ділянці документу (визначена попередньо)
         result_list = []
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if x > (self.inline_value - OFFSET) and (adr_title_y_loc - OFFSET) < y < (next_section_y_loc - OFFSET):
@@ -525,17 +398,160 @@ class PersonProfile:
             adr_value = self._clear_adr_line(result_string)
         return adr_value
 
+    def _get_document_section_range(self, start_word: str, end_word: str) -> Union[tuple, None]:
+        """
+        Визначення меж секції (від одного ключого слова до іншого).
+        Якщо визначене у аргументах друге слово відсутнє - спроба пошуку типових для заголовків блоків
+
+        :returns: координати у пікселях по вертикалі (входження першого слова, входження другого)
+        """
+        section_starts = None
+        section_ends = None
+
+        # Прохід по всім словам та координатам для пошуку входжень ключових слів
+        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+            if section_starts and section_ends:
+                break
+
+            if section_starts is None:
+                start_present = re.search(f'({start_word}$)', t)
+                if start_present:
+                    section_starts = y
+            if section_ends is None:
+                end_present = re.search(f'({end_word}$)', t)
+                if end_present:
+                    section_ends = y
+
+        if section_starts and not section_ends:
+            for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+                if y > (section_starts + ROW_HEIGHT + OFFSET):
+                    end_present = re.search(r'(Свідоцтво|Паспорт|Запит)', t)
+                    if end_present:
+                        section_ends = y
+                        break
+
+        # Неочікуваний випадок, якщо початок блоку визначений пізніше ніж закінчення:
+        if section_starts > section_ends:
+            return None, None
+
+        # Повернення результатів опрацювання:
+        if section_starts and section_ends:
+            return section_starts, section_ends
+        else:
+            return None, None
+
+    def _get_blanks_ranges(self, section_start: int, section_end: int) -> Union[list, None]:
+        """Формування списку пар координат по осі у - межі запису окремого паспорту"""
+        kw_present = []  # координати по "у" у яких зустрічається слово номер
+        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+            if (section_start - OFFSET) < y < (section_end + OFFSET):
+                if str(t).startswith('Номер'):
+                    kw_present.append(y)
+        if not kw_present:
+            return None
+
+        kw_present.append(section_end)  # доповнення кінцем секції для формування останньої пари
+        kw_present.sort()
+
+        blanks_ranges = []
+        for i in range(len(kw_present)):
+            try:
+                blanks_ranges.append((kw_present[i], kw_present[i+1]))
+            except IndexError:
+                break
+        return blanks_ranges
+
+    def _create_pass(self, y_min: int, y_max: int, lang='ukr') -> Union[DocumentId, None]:
+        """Створення інстансу ДокументІД"""
+        assert lang in ['ukr', 'eng']
+
+        blank = None
+        date_created = None
+        date_expired = None
+        expired_status = None
+        office = None
+        office_lines = []
+        office_y = None
+
+        if lang is 'eng':
+            for i, (x, y, t) in enumerate(zip(self.data_eng['left'], self.data_eng['top'], self.data_eng['text'])):
+                if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
+                    blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{0,4}[\d]{6}$)", t)
+                    if blank_present:
+                        blank = blank_present.group(1)
+                        break
+
+        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+            if lang is 'ukr':
+                if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
+                    blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{0,4}[\d]{6}$)", t)
+                    if blank_present:
+                        blank = blank_present.group(1)
+
+            if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((CREATED_MIN - OFFSET) < x < (CREATED_MAX + OFFSET)):
+                created_present = re.search(r"(\d{2}.\d{2}.\d{4})", t)
+                if created_present:
+                    date_created = created_present.group(1)
+
+            if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((EXPIRED_MIN - OFFSET) < x):
+                expired_present = re.search(r"(\d{2}.\d{2}.\d{4})", t)
+                if expired_present:
+                    date_expired = expired_present.group(1)
+
+                spec_status = re.search(r"(недійсним)|(необмежений)", t)
+                if spec_status:
+                    if spec_status.group(0) == 'недійсним':
+                        expired_status = 'недійсний'
+                    elif spec_status.group(0) == 'необмежений':
+                        expired_status = 'необмежений'
+
+            if ((y_min - OFFSET) < y < (y_max - OFFSET)) and ((OFFICE_TIT_X - OFFSET) < x < (OFFICE_TIT_X + OFFSET)):
+                office_title_present = re.search(r"(Орган)", t)
+                if office_title_present:
+                    office_y = y
+
+        if office_y:
+            for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+                if ((office_y - OFFSET) < y < (y_max - OFFSET)) and ((OFFICE_VAL_X - OFFSET) < x):
+                    office_lines.append(t)
+        if office_lines:
+            office_string = ' '.join(office_lines)
+            office_string = office_string.strip()
+            office_string = re.sub(r' +|\n', ' ', office_string)
+            office = office_string
+
+        if blank:
+            return DocumentId(blank, date_created, date_expired, expired_status, office)
+
     def _get_cert_birth(self):
-        ...
+        section_starts, section_ends = self._get_document_section_range('Свідоцтво', "Паспорт")
+        if not section_starts:
+            return None
+        blanks_ranges = self._get_blanks_ranges(section_starts, section_ends)
+        for b in blanks_ranges:
+            passport = self._create_pass(b[0], b[1])
+            if passport:
+                self.certificate_of_birth.append(passport)
 
     def _get_pass_int(self):
-        ...
+        section_starts, section_ends = self._get_document_section_range(r'Паспорт', r"Паспорт\(и\)")
+        if not section_starts:
+            return None
+        blanks_ranges = self._get_blanks_ranges(section_starts, section_ends)
+        for b in blanks_ranges:
+            passport = self._create_pass(b[0], b[1])
+            if passport:
+                self.pass_internal.append(passport)
 
     def _get_pass_ext(self):
-        ...
-
-    def _doc_in_range(self, lim_min: int, lim_max: int):
-        ...
+        section_starts, section_ends = self._get_document_section_range(r"Паспорт\(и\)", r"Запит")
+        if not section_starts:
+            return None
+        blanks_ranges = self._get_blanks_ranges(section_starts, section_ends)
+        for b in blanks_ranges:
+            passport = self._create_pass(b[0], b[1], lang='eng')
+            if passport:
+                self.pass_external.append(passport)
 
     def print_ocr_result(self):
         """

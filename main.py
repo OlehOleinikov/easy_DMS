@@ -47,7 +47,7 @@ for cur_file in files_in_dir:
 
     try:
         assert os.stat(cur_file).st_size < 1000000, "Файл заважкий, вірогідно всередині не анкета..."
-        data = ocr_pdf_to_dict(cur_file)
+        data_ukr, data_eng = ocr_pdf_to_dict(cur_file)
     except Exception as err:
         errors_dict.update({cur_file: f'Помилка читання: {str(err)}'})
         continue
@@ -59,7 +59,7 @@ for cur_file in files_in_dir:
         person_photo = None
 
     try:
-        cur_person = PersonProfile(data, person_photo)
+        cur_person = PersonProfile(data_ukr, data_eng, person_photo)
         person_cards.append(cur_person)
         status = True
     except Exception as err:
