@@ -116,10 +116,16 @@ for i in (range(len(person_cards))):
 
 # Save MS Word file:
 try:
-    ms_word_file.save_docx('dms_result.docx')
-    rprint('[#00FF00]MS Word saved - OK\n')
+    docx_status = ms_word_file.save_docx('dms_result.docx')
+    if docx_status:
+        rprint('[#00FF00]MS Word saved - OK\n')
+    else:
+        rprint(f'[#FF0000]MS Word save error - check permission or close file in other app\n')
 except Exception as err:
     rprint(f'[#FF0000]MS Word save error - check permission or close file in other app - {err}\n')
+
+
+
 
 next(melody)
 input()

@@ -30,6 +30,20 @@ Successful conversion of documents was achieved by converting the content of the
 ![](demo/p_1.png)
 
 
+### Used modules:
+Main:
+- fitz
+- cv2
+- pytesseract
+- re
+- python-docx
+
+Additional:
+- rich
+- tqdm
+- winsound
+
+
 ### Proper libraries installation:
 - pip uninstall fitz
 - pip install PyMuPDF
