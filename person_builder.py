@@ -462,7 +462,12 @@ class PersonProfile:
         return blanks_ranges
 
     def _create_pass(self, y_min: int, y_max: int, lang='ukr') -> Union[DocumentId, None]:
-        """Створення інстансу ДокументІД"""
+        """
+        Створення інстансу ДокументІД
+
+        :param y_min: координата по вертикалі (у) з якої починається ділянка з відомостями про поточний документ
+        :param y_max: координата по вертикалі (у) з якої починається наступна секції (не відноситься до документу)
+        """
         assert lang in ['ukr', 'eng']
 
         blank = None
@@ -473,6 +478,7 @@ class PersonProfile:
         office_lines = []
         office_y = None
 
+        # якщо тип документу потребує розпізнання англійських літер - пошук номеру бланку:
         if lang is 'eng':
             for i, (x, y, t) in enumerate(zip(self.data_eng['left'], self.data_eng['top'], self.data_eng['text'])):
                 if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
@@ -481,6 +487,7 @@ class PersonProfile:
                         blank = blank_present.group(1)
                         break
 
+        # проходження по всім записам з вибіркою атрибутів ДокументІД у вже відомих позиціях:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if lang is 'ukr':
                 if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
@@ -488,28 +495,29 @@ class PersonProfile:
                     if blank_present:
                         blank = blank_present.group(1)
 
+            # Дата видачі:
             if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((CREATED_MIN - OFFSET) < x < (CREATED_MAX + OFFSET)):
                 created_present = re.search(r"(\d{2}.\d{2}.\d{4})", t)
                 if created_present:
                     date_created = created_present.group(1)
-
+            # Дійсний до:
             if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((EXPIRED_MIN - OFFSET) < x):
                 expired_present = re.search(r"(\d{2}.\d{2}.\d{4})", t)
                 if expired_present:
                     date_expired = expired_present.group(1)
-
+                # Статус обмеження (недійсний/необмежений):
                 spec_status = re.search(r"(недійсним)|(необмежений)", t)
                 if spec_status:
                     if spec_status.group(0) == 'недійсним':
                         expired_status = 'недійсний'
                     elif spec_status.group(0) == 'необмежений':
                         expired_status = 'необмежений'
-
+            # Заголовок запису про орган видачі документу:
             if ((y_min - OFFSET) < y < (y_max - OFFSET)) and ((OFFICE_TIT_X - OFFSET) < x < (OFFICE_TIT_X + OFFSET)):
                 office_title_present = re.search(r"(Орган)", t)
                 if office_title_present:
                     office_y = y
-
+        # Якщо знайдено заголовок органу видачі - вибрати весь текст до кінця секції документу:
         if office_y:
             for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
                 if ((office_y - OFFSET) < y < (y_max - OFFSET)) and ((OFFICE_VAL_X - OFFSET) < x):
@@ -520,10 +528,14 @@ class PersonProfile:
             office_string = re.sub(r' +|\n', ' ', office_string)
             office = office_string
 
+        # Створити інстанс, якщо є хоча б номер бланку документу:
         if blank:
             return DocumentId(blank, date_created, date_expired, expired_status, office)
+        else:
+            return None
 
     def _get_cert_birth(self):
+        """Накопичення та валідація всіх записів свідоцтв"""
         section_starts, section_ends = self._get_document_section_range('Свідоцтво', "Паспорт")
         if not section_starts:
             return None
@@ -534,6 +546,7 @@ class PersonProfile:
                 self.certificate_of_birth.append(passport)
 
     def _get_pass_int(self):
+        """Накопичення та валідація всіх записів паспортів (внутрішніх)"""
         section_starts, section_ends = self._get_document_section_range(r'Паспорт', r"Паспорт\(и\)")
         if not section_starts:
             return None
@@ -544,6 +557,7 @@ class PersonProfile:
                 self.pass_internal.append(passport)
 
     def _get_pass_ext(self):
+        """Накопичення та валідація всіх записів паспортів (закордонних)"""
         section_starts, section_ends = self._get_document_section_range(r"Паспорт\(и\)", r"Запит")
         if not section_starts:
             return None
