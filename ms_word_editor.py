@@ -94,7 +94,7 @@ class _DocEditorEmpty:
 
 class DocEditor(_DocEditorEmpty):
     """
-    Клас формування документу
+    Клас формування документу з відомостями профайлу
     """
     def __init__(self):
         super().__init__()

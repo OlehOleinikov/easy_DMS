@@ -1,26 +1,23 @@
 """
-Converter PDF to text
-add text to branch
+Модуль формування екземплярів профайлів зі словника розпізнаного тексту
 """
 import io
 import re
 from typing import Union
 
-OFFSET = 10  # можлива похибка при визначенні меж боксу слова (у пікселях)
-ROW_HEIGHT = (68+2)  # типова висота рядку у пікселях (для крокування)
-BLANK_MIN = 355
-BLANK_MAX = 635
-CREATED_MIN = 923
-CREATED_MAX = 1202
-EXPIRED_MIN = 1490
-OFFICE_TIT_X = 183
-OFFICE_VAL_X = 465
-PAGE_HEIGHT = 2500
-PAGE_WIDTH = 1800
-
+OFFSET = 10             # можлива похибка при визначенні меж боксу слова (у пікселях)
+ROW_HEIGHT = (68+2)     # типова висота рядку у пікселях (для крокування)
+BLANK_MIN = 355         # межі значення номеру бланку по х
+BLANK_MAX = 635         # межі значення номеру бланку по х
+CREATED_MIN = 923       # межі значення дати видачі по х
+CREATED_MAX = 1202      # межі значення дати видачі по х
+EXPIRED_MIN = 1490      # початок значення "Дійсний до" по х
+OFFICE_TIT_X = 183      # початок заголовку "Орган видачі" по х
+OFFICE_VAL_X = 465      # початок значення "Орган видачі" по х
 
 
 class DocumentId:
+    """Клас формування зведених даних про окремий документ"""
     blank_number = None
     date_created = None
     date_expired = None
@@ -35,22 +32,6 @@ class DocumentId:
         self.pass_office = office
         self.expired_status = status
 
-    def find_office(self, text):
-        office_lines = []
-        for line in text.split('\n'):
-            append_status = True
-            for word in self.non_office_starts:
-                if line.startswith(word):
-                    append_status = False
-                    break
-            if re.search(r'\d{2}.\d{2}.\d{4}', line):
-                append_status = False
-            if append_status:
-                office_lines.append(line)
-        if office_lines:
-            office = ' '.join(office_lines)
-            self.pass_office = re.sub(r'Орган видачі: ', '', office)
-
     def __str__(self):
         return str(self.blank_number) + " (" \
                + str(self.date_created) + " - " \
@@ -59,6 +40,7 @@ class DocumentId:
 
 
 class PersonProfile:
+    """Клас формування інформації про профайл"""
     name_full = None
     dob = None
     pob = None
@@ -98,8 +80,6 @@ class PersonProfile:
         self._get_cert_birth()
         self._get_pass_int()
         self._get_pass_ext()
-
-        # PHOTO
         self.image = person_photo if person_photo else None
 
     def __str__(self):
@@ -131,7 +111,7 @@ class PersonProfile:
         return False
 
     def _get_full_name(self) -> Union[str, None]:
-        """Пошук повного імені поблизу назв полів анкети"""
+        """Пошук повного імені поблизу назв відповідних полів профайлу"""
         sn_y = None  # Позиція прізвища
         fn_y = None  # Позиція ім'я
         tn_y = None  # Позиція по батькові
@@ -159,13 +139,16 @@ class PersonProfile:
             return None
 
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+            # Значення ПРІЗВИЩЕ:
             if sn_y and sn_t is None:
                 test_result = parse_name(expected_y_location=sn_y, current_y=y, text=t)
                 sn_t = test_result if test_result else None
                 self.inline_value = x if test_result else None
+            # Значення ІМ'Я:
             if fn_y and fn_t is None:
                 test_result = parse_name(expected_y_location=fn_y, current_y=y, text=t)
                 fn_t = test_result if test_result else None
+            # Значення ПО БАТЬКОВІ:
             if tn_y and tn_t is None:
                 test_result = parse_name(expected_y_location=tn_y, current_y=y, text=t)
                 tn_t = test_result if test_result else None
@@ -180,9 +163,11 @@ class PersonProfile:
     def _get_dob(self) -> Union[str, None]:
         """Пошук дати народження"""
         birth_value = None
-        birth_title_y_loc = None  # Позиція по вертикалі "y" (px) заголовка "Дата народження"
-        birth_occur = []  # Позиції у яких зустрічається слово "народження"
-        date_occur = []  # Позиції у яких зустрічається слово "Дата"
+        birth_title_y_loc = None    # Позиція по вертикалі "y" (px) заголовка "Дата народження"
+        birth_occur = []            # Позиції у яких зустрічається слово "народження"
+        date_occur = []             # Позиції у яких зустрічається слово "Дата"
+
+        # Пошук випадку коли слова "Дата" та "народження" розташовані поруч та визначення координати по "у":
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             date_word_present = re.search(r'(Дата)', t)
             if date_word_present:
@@ -196,6 +181,11 @@ class PersonProfile:
                     if abs(d-b) <= ROW_HEIGHT + OFFSET:  # Місце, де слова "Дата" та "народження" - поруч
                         birth_title_y_loc = b if b <= d else d  # Розташування визначається за вищим словом (Дата)
 
+        # Припинити, якщо не знайдено заголовок:
+        if not birth_title_y_loc:
+            return None
+
+        # Виділення значення дати навпроти встановленого розташування заголовку - birth_title_y_loc:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if (self.inline_value - OFFSET < x < self.inline_value + OFFSET) and \
                (birth_title_y_loc - OFFSET < y < birth_title_y_loc + OFFSET):
@@ -209,15 +199,19 @@ class PersonProfile:
         """Пошук особистого номеру УНЗР"""
         uni_code_value = None
         uni_code_title_y_loc = None
+
+        # Пошук заголовку:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             unicode_title_present = re.search(r'(УНЗР)', t)
             if unicode_title_present:
                 uni_code_title_y_loc = y
                 break
 
+        # Припинити, якщо не знайдено заголовок:
         if uni_code_title_y_loc is None:
             return None
 
+        # Пошук значення:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if (self.inline_value - OFFSET < x < self.inline_value + OFFSET) and \
                (uni_code_title_y_loc - OFFSET < y < uni_code_title_y_loc + OFFSET):
@@ -231,14 +225,19 @@ class PersonProfile:
         """Пошук коду платника податків (РНОКПП)"""
         tax_code_value = None
         tax_code_title_y_loc = None
+
+        # Пошук заголовку:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             tax_title_present = re.search(r'(РНОКПП)', t)
             if tax_title_present:
                 tax_code_title_y_loc = y
                 break
+
+        # Припинити, якщо не знайдено заголовок:
         if tax_code_title_y_loc is None:
             return None
 
+        # Пошук значення:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if (self.inline_value - OFFSET < x < self.inline_value + OFFSET) and \
                (tax_code_title_y_loc - OFFSET < y < tax_code_title_y_loc + OFFSET):
@@ -252,14 +251,19 @@ class PersonProfile:
         """Пошук засобу зв'язку (телефон)"""
         phone_value = None
         phone_title_y_loc = None
+
+        # Пошук заголовку:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             phone_title_present = re.search(r'(Телефон)', t)
             if phone_title_present:
                 phone_title_y_loc = y
                 break
+
+        # Припинити, якщо не знайдено заголовок:
         if phone_title_y_loc is None:
             return None
 
+        # Пошук значення:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if (self.inline_value - OFFSET < x < self.inline_value + OFFSET) and \
                     (phone_title_y_loc - OFFSET < y < phone_title_y_loc + OFFSET):
@@ -274,10 +278,12 @@ class PersonProfile:
     def _get_place_birth(self):
         """Пошук місця народження"""
         birth_value = None
-        birth_title_y_loc = None  # Позиція по вертикалі "y" (px) заголовка "Дата народження"
-        next_section_y_loc = None
-        birth_occur = []  # Позиції у яких зустрічається слово "народження"
-        place_occur = []  # Позиції у яких зустрічається слово "Місце"
+        birth_title_y_loc = None    # Позиція по вертикалі "y" (px) заголовка "Дата народження"
+        next_section_y_loc = None   # Позиція по вертикалі "у" (рх) з якої починається наступна секція
+        birth_occur = []            # Позиції у яких зустрічається слово "народження"
+        place_occur = []            # Позиції у яких зустрічається слово "Місце"
+
+        # Пошук заголовка:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             place_word_present = re.search(r'(Місце)', t)
             if place_word_present:
@@ -291,14 +297,22 @@ class PersonProfile:
                     if abs(p-b) <= ROW_HEIGHT + OFFSET:  # Місце, де слова "Місце" та "народження" - поруч
                         birth_title_y_loc = b if b <= p else p  # Розташування визначається за вищим словом (Дата)
 
+        # Припинити, якщо не знайдено заголовок:
+        if birth_title_y_loc is None:
+            return None
+
+        # Пошук закінчення секції:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if (y > birth_title_y_loc) and ((self.inline_title - OFFSET) < x < (self.inline_title + OFFSET)):
                 if not (str(t).startswith('Місце') | str(t).startswith('народження')):
                     next_section_y_loc = y
                     break
+
+        # Припинити, якщо не визначено межі секції:
         if next_section_y_loc is None:
             return None
 
+        # Збір слів з ділянки, яка містить значення місця народження:
         result_list = []
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if x > (self.inline_value - OFFSET) and (birth_title_y_loc - OFFSET) < y < (next_section_y_loc - OFFSET):
@@ -315,6 +329,7 @@ class PersonProfile:
         text_line = re.sub(r' +|\n', ' ', text_line)
         text_line = re.sub(r'УКРАЇНА, ', '', text_line)
         text_line = re.sub(r'УКРАЇНА ', '', text_line)
+        text_line = text_line.strip(' ,')
 
         # Всі слова кемелкейсом:
         words = re.finditer(r"([\S`’']{2,})| ([\S`’']{2,})", text_line)
@@ -334,6 +349,13 @@ class PersonProfile:
                 for adr_type in address_types:
                     text_line = text_line.replace(adr_type, adr_type.lower())
 
+        # Виправлення неправильно застосування кемелкейсу для слів з апострофом:
+        words = re.finditer(r"([А-Яа-яІЇЙЄ]{1}[`’']{1,}[А-Яа-яІЇЙЄ]{2,})", text_line)
+        if words:
+            for w in words:
+                text_line = text_line.replace(w.group(1), w.group(1).lower())
+                text_line = text_line.replace("\n", ' ')
+
         # Скорочення (буд.|кв.|...) всі літери малі:
         words = re.finditer(r"[\S]*\. ", text_line)
         if words:
@@ -341,7 +363,7 @@ class PersonProfile:
                 text_line = text_line.replace(w.group(), w.group().lower())
 
         # Видалення унікального номеру території
-        text_line = re.sub(r"..\d{17}", '', text_line)
+        text_line = re.sub(r" .{2,5}\d{17}", '', text_line)
         text_line = text_line.strip()
         # Видалення дати реєстрації:
         text_line = re.sub(r"\d{8}", '', text_line)
@@ -430,19 +452,19 @@ class PersonProfile:
                         section_ends = y
                         break
 
-        # Неочікуваний випадок, якщо початок блоку визначений пізніше ніж закінчення:
-        if section_starts > section_ends:
-            return None, None
-
         # Повернення результатів опрацювання:
         if section_starts and section_ends:
-            return section_starts, section_ends
+            # Неочікуваний випадок, якщо початок блоку визначений пізніше ніж закінчення:
+            if section_starts > section_ends:
+                return None, None
+            else:
+                return section_starts, section_ends
         else:
             return None, None
 
     def _get_blanks_ranges(self, section_start: int, section_end: int) -> Union[list, None]:
-        """Формування списку пар координат по осі у - межі запису окремого паспорту"""
-        kw_present = []  # координати по "у" у яких зустрічається слово номер
+        """Формування списку пар координат по осі у - межі запису окремих паспортів"""
+        kw_present = []  # координати по "у" у яких зустрічається слово "Номер"
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
             if (section_start - OFFSET) < y < (section_end + OFFSET):
                 if str(t).startswith('Номер'):
@@ -479,17 +501,17 @@ class PersonProfile:
         office_y = None
 
         # якщо тип документу потребує розпізнання англійських літер - пошук номеру бланку:
-        if lang is 'eng':
+        if lang == 'eng':
             for i, (x, y, t) in enumerate(zip(self.data_eng['left'], self.data_eng['top'], self.data_eng['text'])):
                 if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
-                    blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{0,4}[\d]{6}$)", t)
+                    blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{0,5}[\d]{6}$)", t)
                     if blank_present:
                         blank = blank_present.group(1)
                         break
 
         # проходження по всім записам з вибіркою атрибутів ДокументІД у вже відомих позиціях:
         for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
-            if lang is 'ukr':
+            if lang == 'ukr':
                 if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
                     blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{0,4}[\d]{6}$)", t)
                     if blank_present:
