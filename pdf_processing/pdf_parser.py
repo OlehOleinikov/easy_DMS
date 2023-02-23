@@ -21,7 +21,15 @@ pytesseract.pytesseract.tesseract_cmd = r"full path to the exe file"
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
-def compute_ocr(parsed_image: bytes, write_test_file=False) -> dict:
+def ocr_pdf_to_dict(file:str) -> dict:
+    """
+    Отримання змісту PDF у представленні словника з розпізнаними словами та їх положеннями на сторінці
+    """
+    image_data = _convert_pdf_to_image(file)
+    return _compute_ocr(image_data)
+
+
+def _compute_ocr(parsed_image: bytes, write_test_file=False) -> dict:
     """
     Розпізнання зображення (попередньо вилученого з файлу та перетвореного у байтове представлення),
     формування словника з розпізнаним текстом та його координатами
@@ -55,7 +63,7 @@ def compute_ocr(parsed_image: bytes, write_test_file=False) -> dict:
     return ocr_result_dict
 
 
-def convert_pdf_to_image(file: str) -> bytes:
+def _convert_pdf_to_image(file: str) -> bytes:
     """
     Читання PDF файлу, формування графічного зображення документу у байтовому представленні
     """
@@ -71,38 +79,13 @@ def convert_pdf_to_image(file: str) -> bytes:
     return pix_io
 
 
-def get_pdf_image_content(file):
-    """
-    Отримання першого зображення PDF документу у байтовому представленні (RGB)
-    """
-    file_path = file
-    pdf_file = fitz.open(file_path)
-
-    # кількість сторінок у файлі
-    number_of_pages = len(pdf_file)
-    # проходження по кожній сторінці pdf
-    for current_page_index in range(number_of_pages):
-        # проходження по кожній сторінці
-        for img_index,img in enumerate(pdf_file.get_page_images(current_page_index)):
-            xref = img[0]
-            image = fitz.Pixmap(pdf_file, xref)
-            # для зображень з кольоровою схемою GRAY та RGB
-            if image.n < 5:
-                stream = image.pil_tobytes(format='PNG')
-                memory_file = io.BytesIO(stream)
-                return memory_file
-            # для кольорової схеми  CMYK: перетворення на  RGB
-            else:
-                new_image = fitz.Pixmap(fitz.csRGB, image)
-                memory_file = io.BytesIO()
-                new_image.pil_tobytes(memory_file)
-                return memory_file
-
-
 def get_text_data(file) -> str:
-    """Отримання даних PDF файлу у вигляді стрінги з розділювачами нового рядку (очищення від 1-2 символьних рідків)"""
+    """
+    Отримання даних PDF файлу у вигляді стрінги з розділювачами нового рядку
+    (очищення від 1-2 символьних рідків) DeprecationWarning
+    """
     warnings.warn("Через замішування тексту всередині блоків методи process_page() не будуть використовуватись. "
-                  "Вилучення тексту замінено на OCR", DeprecationWarning)
+                  "Все опрацювання замінено на OCR", DeprecationWarning)
     output_string = io.StringIO()
     with open(file, 'rb') as in_file:
         parser = PDFParser(in_file)
@@ -124,11 +107,11 @@ def get_text_data(file) -> str:
 
 def show_pdf_text_localization(file):
     """
-    Збір тектових записів з PDF та відображення розмірів блоків (положення на сторінці).
-    Для відображення у консоль якості вилучення тексту з PDF.
+    Збір текстових записів з PDF та відображення розмірів блоків (положення на сторінці).
+    Для відображення у консоль якості вилучення тексту з PDF. DeprecationWarning
     """
     warnings.warn("Через замішування тексту всередині блоків методи process_page() не будуть використовуватись. "
-                  "Вилучення тексту замінено на OCR", DeprecationWarning)
+                  "Все опрацювання замінено на OCR", DeprecationWarning)
     fp = open(file, 'rb')
     rsrcmgr = PDFResourceManager()
     laparams = LAParams()

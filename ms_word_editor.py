@@ -8,12 +8,12 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.shared import Pt, RGBColor, Cm
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
-from converter_pdf import PersonProfile, DocumentId
+from person_builder import PersonProfile, DocumentId
 
 
 class _DocEditorEmpty:
     """
-    Клас, що містить інстанс порожнього документу (python-docx) з типовими налаштуваннями та методами
+    Клас, що містить екземпляр порожнього документу (python-docx) з типовими налаштуваннями та методами
     """
 
     def __init__(self):
@@ -54,11 +54,6 @@ class _DocEditorEmpty:
         text_red.font.name = 'Times New Roman'
         text_red.font.size = Pt(14)
         text_red.font.color.rgb = RGBColor(127, 12, 7)
-        # text_red.paragraph_format.space_before = Pt(0)
-        # text_red.paragraph_format.space_after = Pt(0)
-        # text_red.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
-        # text_red.paragraph_format.first_line_indent = Cm(1.25)
-        # text_red.paragraph_format.line_spacing = 1
 
         # Дефолтний стиль - ненумерований список:
         list_style = self.styles['List Bullet']
@@ -68,8 +63,6 @@ class _DocEditorEmpty:
         list_style.paragraph_format.space_after = Pt(0)
         list_style.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
         list_style.paragraph_format.first_line_indent = Cm(1.25)
-        # list_style.paragraph_format.first_line_indent = Cm(-0.5)
-        # list_style.paragraph_format.left_indent = Cm(0.63)
         list_style.paragraph_format.line_spacing = 1
 
         # Дефолтний стиль - ненумерований список другого порядку:
@@ -101,7 +94,7 @@ class _DocEditorEmpty:
 
 class DocEditor(_DocEditorEmpty):
     """
-    Клас формування документу зі звітом про доходи (відповідно завантажених у інстанс FileProfitXML)
+    Клас формування документу
     """
     def __init__(self):
         super().__init__()

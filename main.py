@@ -5,55 +5,70 @@ from rich.tree import Tree
 from rich.console import Console
 from rich.table import Table
 
-from converter_pdf import PersonProfile, get_pdf_data, get_ocr, show_pdf_text_localization, get_pdf_tabula
+from pdf_processing import ocr_pdf_to_dict, get_pdf_main_image
+from person_builder import PersonProfile
 from ms_word_editor import DocEditor
-from defines import melody_run, intro_ascii
+from intro import intro_ascii
+from melody import melody_loop
 
-DEBUG_MODE = True
+import pickle
 
-melody = melody_run()
+DEBUG_MODE = True  # some reports for developing purposes
+
+melody = melody_loop()
 person_cards = []
 errors_dict = {}
 
+# INTRO PART:
 rprint('[#FF00FF]' + 'Project page: github.com/OlehOleinikov/easy_DMS\nLicense:      GNU GPL v.3' + '[/#FF00FF]')
 rprint(intro_ascii)
-rprint('[#FF00FF]Scaning...\n')
+rprint('[#FF00FF]Scanning...\n')
 
 next(melody)
 
+# LOOK FOR PDF FILES:
 files_in_dir = [x for x in os.listdir() if x.lower().endswith('.pdf')]
 if not files_in_dir:
     rprint(f'[#FF0000]No PDF files in directory:\n{os.getcwd()}\n')
     input()
     exit()
 
+# PRINT PDF FILES TREE:
 tree = Tree('[#FF00FF]' + f"{os.getcwd()}", guide_style="bold bright_blue")
 for f in files_in_dir:
     tree.add('[#FF00FF]' + f)
 rprint(tree)
-
 print('\n\n')
+
+# CONVERTING LOOP:
 rprint('[#FF00FF]Converting...\n')
-
-for idx, name in enumerate(files_in_dir):
+for cur_file in files_in_dir:
     status = False
+
     try:
-        if DEBUG_MODE:
-            show_pdf_text_localization(name)
-            print(get_pdf_tabula(name))
+        assert os.stat(cur_file).st_size < 1000000, "Файл заважкий, вірогідно всередині не анкета..."
+        data = ocr_pdf_to_dict(cur_file)
+    except Exception as err:
+        errors_dict.update({cur_file: f'Помилка читання: {str(err)}'})
+        continue
 
+    try:
+        person_photo = get_pdf_main_image(cur_file)
+    except Exception as err:
+        errors_dict.update({cur_file: f'Помилка парсингу фото: {str(err)}'})
+        person_photo = None
 
-        data = get_pdf_data(name)
-        cur_person = PersonProfile(data, name)
+    try:
+        cur_person = PersonProfile(data, person_photo)
         person_cards.append(cur_person)
         status = True
     except Exception as err:
-        errors_dict.update({name: str(err)})
+        errors_dict.update({cur_file: f'Помилка збору відомостей: {str(err)}'})
 
     if status:
-        rprint("[#00FF00]   OK   [#FF00FF]file: %s" % name)
+        rprint("[#00FF00]   OK   [#FF00FF]file: %s" % cur_file)
     else:
-        rprint("[#FF0000] ERROR! [#FF00FF]file: %s" % name)
+        rprint("[#FF0000] ERROR! [#FF00FF]file: %s" % cur_file)
 
 if errors_dict:
     print('\n')
