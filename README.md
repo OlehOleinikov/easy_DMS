@@ -13,7 +13,7 @@ Successful conversion of documents was achieved by converting the content of the
 
 ### PDF view
 
-![](demo/p_3.png)
+![](demo/p_5.png)
 
 ### Converted to MS Word
 
