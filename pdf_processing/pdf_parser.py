@@ -147,3 +147,13 @@ def show_pdf_text_localization(file):
                         print(f'height: {round(y_min)}-{round(y_max)} (size: {round(abs(y_min - y_max))})')
                         print(f'width:  {round(x_min)}-{round(x_max)} (size: {round(abs(x_min - x_max))})')
                         rprint('[red]' + res_text + '[/red]')
+
+
+def get_cv_image(pdf_file):
+    """
+    (3368, 2382, 3)
+    """
+    file_io = _convert_pdf_to_image(pdf_file)
+    nparr = np.fromstring(file_io, np.uint8)  # формування масиву зображення
+    img_np = cv2.imdecode(nparr, -1)
+    return img_np

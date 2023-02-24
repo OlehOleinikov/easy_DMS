@@ -5,6 +5,9 @@ import io
 import re
 from typing import Union
 
+from pdf_processing import get_cv_image
+import cv2
+
 OFFSET = 10             # можлива похибка при визначенні меж боксу слова (у пікселях)
 ROW_HEIGHT = (68+2)     # типова висота рядку у пікселях (для крокування)
 BLANK_MIN = 355         # межі значення номеру бланку по х
@@ -14,6 +17,61 @@ CREATED_MAX = 1202      # межі значення дати видачі по �
 EXPIRED_MIN = 1490      # початок значення "Дійсний до" по х
 OFFICE_TIT_X = 183      # початок заголовку "Орган видачі" по х
 OFFICE_VAL_X = 465      # початок значення "Орган видачі" по х
+
+C_R = (0, 0, 255)
+C_G = (0, 200, 0)
+C_B = (255, 0, 0)
+C_M = (255, 0, 255)
+C_C = (255, 0, 255)
+C_Y = (0, 255, 255)
+
+DEF_COLOR = C_G
+TEXT_DEF_THICK = 1
+TEXT_DEF_SIZE = 0.6
+LINE_DEF_THICK = 2
+DEF_RADIUS = 5
+DEF_FONT = cv2.FONT_HERSHEY_SIMPLEX
+PAGE_H = 3368
+PAGE_W = 2382
+
+
+def d_text(img, x, y, text, font=DEF_FONT, size=TEXT_DEF_SIZE, color=DEF_COLOR, thick=TEXT_DEF_THICK):
+    img = cv2.putText(img, text, (x+5+OFFSET, y-5-OFFSET), font, size, color, thick)
+    return img
+
+
+def d_rect(img, x, y, h, w, color=DEF_COLOR, desc=None, line=LINE_DEF_THICK):
+    img = cv2.rectangle(img, (x, y), (x + w, y + h), color, line)
+    if desc:
+        img = d_text(img, x, y, desc, color=color)
+    return img
+
+
+def d_circ(img, x, y, radius=DEF_RADIUS, color=DEF_COLOR, desc=None):
+    img = cv2.circle(img, (x, y), radius=radius, color=color, thickness=LINE_DEF_THICK)
+    if desc:
+        img = d_text(img, x, y, desc, color=color)
+    return img
+
+
+def line_h(img, y, color=C_C, thick=LINE_DEF_THICK):
+    img = cv2.line(img, (0, y), (PAGE_W, y), color, thick)
+    img = cv2.line(img, (0, y + OFFSET), (PAGE_W, y+OFFSET), color, 1)
+    img = cv2.line(img, (0, y - OFFSET), (PAGE_W, y-OFFSET), color, 1)
+    return img
+
+
+def line_v(img, x, color=DEF_COLOR, thick=LINE_DEF_THICK):
+    img = cv2.line(img, (x, 0), (x, PAGE_H), color, thick)
+    img = cv2.line(img, (x - OFFSET, 0), (x-OFFSET, PAGE_H), color, 1)
+    img = cv2.line(img, (x + OFFSET, 0), (x+OFFSET, PAGE_H), color, 1)
+    return img
+
+
+def d_elem(img, x, y, h, w, color=DEF_COLOR, desc=None, line=LINE_DEF_THICK):
+    img = d_rect(img, x, y, h, w, color, desc, line)
+    img = d_circ(img, x, y, color=color)
+    return img
 
 
 class DocumentId:
@@ -53,7 +111,7 @@ class PersonProfile:
 
     address_types = ['Район', "Область"]
 
-    def __init__(self, data: dict, data_eng: dict, person_photo: io.BytesIO):
+    def __init__(self, data: dict, data_eng: dict, person_photo: io.BytesIO, origin_file: Union[str, None] = None):
         self.data = data
         self.data_eng = data_eng
         self.inline_title = None
@@ -64,6 +122,8 @@ class PersonProfile:
         self.width = data.get('width', [])
         self.heigh = data.get('height', [])
         self.level = data.get('level', [])
+
+        self.pic = get_cv_image(origin_file)
 
         self.certificate_of_birth = []
         self.pass_internal = []
@@ -81,6 +141,7 @@ class PersonProfile:
         self._get_pass_int()
         self._get_pass_ext()
         self.image = person_photo if person_photo else None
+        cv2.imwrite("result.png", self.pic)
 
     def __str__(self):
         desc_text = f'{self.name_full}, {self.dob} р.н.:' \
@@ -121,14 +182,29 @@ class PersonProfile:
         tn_t = None  # Текст по батькові
 
         # Пошук розташування заголовків по "у":
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if sn_y is None:
                 sn_y = y if re.search(r'(Прізвище)', t) else None
                 self.inline_title = x if re.search(r'(Прізвище)', t) else None  # фіксується лінія заголовків по "х"
+                if sn_y:
+                    self.pic = d_elem(self.pic, x, y, h, w, C_R, desc=f'({x};{y})')
+                    self.pic = line_h(self.pic, y, C_R)
+                    self.pic = d_text(self.pic, 5, y, f's_name(y={y})', color=C_R)
+
             if fn_y is None:
                 fn_y = y if re.search(r'(Ім.я)', t) else None
+                if fn_y:
+                    self.pic = d_elem(self.pic, x, y, h, w, C_R, desc=f'({x};{y})')
+                    self.pic = line_h(self.pic, y, C_R)
+                    self.pic = d_text(self.pic, 5, y, f'f_name(y={y})', color=C_R)
+
             if tn_y is None:
                 tn_y = y if re.search(r'(батькові)', t) else None
+                if tn_y:
+                    self.pic = d_elem(self.pic, x, y, h, w, C_R, desc=f'({x};{y})')
+                    self.pic = line_h(self.pic, y, C_R)
+                    self.pic = d_text(self.pic, 5, y, f't_name(y={y})', color=C_R)
+
 
         def parse_name(expected_y_location: int, current_y: int, text: str) -> Union[str, None]:
             """Парсинг частини імені в межах дії заголовку"""
@@ -138,20 +214,39 @@ class PersonProfile:
                     return mask_test.group(1)
             return None
 
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             # Значення ПРІЗВИЩЕ:
             if sn_y and sn_t is None:
                 test_result = parse_name(expected_y_location=sn_y, current_y=y, text=t)
                 sn_t = test_result if test_result else None
                 self.inline_value = x if test_result else None
+                if test_result:
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
+
             # Значення ІМ'Я:
             if fn_y and fn_t is None:
                 test_result = parse_name(expected_y_location=fn_y, current_y=y, text=t)
                 fn_t = test_result if test_result else None
+                if test_result:
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
+
+
             # Значення ПО БАТЬКОВІ:
             if tn_y and tn_t is None:
                 test_result = parse_name(expected_y_location=tn_y, current_y=y, text=t)
                 tn_t = test_result if test_result else None
+                if test_result:
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
+
+        if self.inline_value:
+            self.pic = cv2.line(self.pic, (self.inline_value, 0), (self.inline_value, 1382), C_R, LINE_DEF_THICK)
+            self.pic = cv2.line(self.pic, (self.inline_value+OFFSET, 0), (self.inline_value+OFFSET, 1382), C_R, 1)
+            self.pic = cv2.line(self.pic, (self.inline_value - OFFSET, 0), (self.inline_value - OFFSET, 1382), C_R, 1)
+            self.pic = d_text(self.pic, self.inline_value+5, 240, f'values line (x={self.inline_value})', color=C_R)
+
+        if self.inline_title:
+            self.pic = line_v(self.pic, self.inline_title, color=C_R)
+            self.pic = d_text(self.pic, self.inline_title + 5, 240, f'headers line (x={self.inline_title})', color=C_R)
 
         assert sn_t is not None, "Не розпізнано ПРІЗВИЩЕ"
         assert fn_t is not None, "Не розпізнано ІМ'Я"
@@ -168,7 +263,7 @@ class PersonProfile:
         date_occur = []             # Позиції у яких зустрічається слово "Дата"
 
         # Пошук випадку коли слова "Дата" та "народження" розташовані поруч та визначення координати по "у":
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             date_word_present = re.search(r'(Дата)', t)
             if date_word_present:
                 date_occur.append(y)
@@ -180,18 +275,21 @@ class PersonProfile:
                 for b in birth_occur:
                     if abs(d-b) <= ROW_HEIGHT + OFFSET:  # Місце, де слова "Дата" та "народження" - поруч
                         birth_title_y_loc = b if b <= d else d  # Розташування визначається за вищим словом (Дата)
-
+        if birth_title_y_loc:
+            self.pic = line_h(self.pic, birth_title_y_loc, C_R)
+            self.pic = d_text(self.pic, 5, birth_title_y_loc, f'Birth title(y={birth_title_y_loc})', color=C_R)
         # Припинити, якщо не знайдено заголовок:
         if not birth_title_y_loc:
             return None
 
         # Виділення значення дати навпроти встановленого розташування заголовку - birth_title_y_loc:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if (self.inline_value - OFFSET < x < self.inline_value + OFFSET) and \
                (birth_title_y_loc - OFFSET < y < birth_title_y_loc + OFFSET):
                 birth_present = re.search(r"(\d{2}.\d{2}.\d{4})", t)
                 if birth_present:
                     birth_value = birth_present.group(1)
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
                     break
         return birth_value
 
@@ -201,10 +299,13 @@ class PersonProfile:
         uni_code_title_y_loc = None
 
         # Пошук заголовку:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             unicode_title_present = re.search(r'(УНЗР)', t)
             if unicode_title_present:
                 uni_code_title_y_loc = y
+                self.pic = d_elem(self.pic, x, y, h, w, C_R, desc=f'({x};{y})')
+                self.pic = line_h(self.pic, y, C_R)
+                self.pic = d_text(self.pic, 5, y, f'uni code(y={y})', color=C_R)
                 break
 
         # Припинити, якщо не знайдено заголовок:
@@ -212,12 +313,13 @@ class PersonProfile:
             return None
 
         # Пошук значення:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if (self.inline_value - OFFSET < x < self.inline_value + OFFSET) and \
                (uni_code_title_y_loc - OFFSET < y < uni_code_title_y_loc + OFFSET):
                 value_present = re.search(r"(\d{13})", t)
                 if value_present:
                     uni_code_value = value_present.group(1)
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
                     break
         return uni_code_value
 
@@ -227,10 +329,13 @@ class PersonProfile:
         tax_code_title_y_loc = None
 
         # Пошук заголовку:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             tax_title_present = re.search(r'(РНОКПП)', t)
             if tax_title_present:
                 tax_code_title_y_loc = y
+                self.pic = d_elem(self.pic, x, y, h, w, C_R, desc=f'({x};{y})')
+                self.pic = line_h(self.pic, y, C_R)
+                self.pic = d_text(self.pic, 5, y, f'tax code(y={y})', color=C_R)
                 break
 
         # Припинити, якщо не знайдено заголовок:
@@ -238,12 +343,13 @@ class PersonProfile:
             return None
 
         # Пошук значення:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if (self.inline_value - OFFSET < x < self.inline_value + OFFSET) and \
                (tax_code_title_y_loc - OFFSET < y < tax_code_title_y_loc + OFFSET):
                 value_present = re.search(r"(\d{10})", t)
                 if value_present:
                     tax_code_value = value_present.group(1)
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
                     break
         return tax_code_value
 
@@ -253,10 +359,13 @@ class PersonProfile:
         phone_title_y_loc = None
 
         # Пошук заголовку:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             phone_title_present = re.search(r'(Телефон)', t)
             if phone_title_present:
                 phone_title_y_loc = y
+                self.pic = d_elem(self.pic, x, y, h, w, C_R, desc=f'({x};{y})')
+                self.pic = line_h(self.pic, y, C_R)
+                self.pic = d_text(self.pic, 5, y, f'phone(y={y})', color=C_R)
                 break
 
         # Припинити, якщо не знайдено заголовок:
@@ -264,11 +373,12 @@ class PersonProfile:
             return None
 
         # Пошук значення:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if (self.inline_value - OFFSET < x < self.inline_value + OFFSET) and \
                     (phone_title_y_loc - OFFSET < y < phone_title_y_loc + OFFSET):
                 value_present = re.search(r"(0\d{9}|\+38\d{10}|38\d{10}|8\d{10})", t)
                 if value_present:
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
                     phone_value = value_present.group(1)
                     phone_value = phone_value[1:] if phone_value.startswith('+') else phone_value
                     phone_value = '38' + phone_value if len(phone_value) == 10 else phone_value
@@ -284,7 +394,7 @@ class PersonProfile:
         place_occur = []            # Позиції у яких зустрічається слово "Місце"
 
         # Пошук заголовка:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             place_word_present = re.search(r'(Місце)', t)
             if place_word_present:
                 place_occur.append(y)
@@ -296,16 +406,20 @@ class PersonProfile:
                 for b in birth_occur:
                     if abs(p-b) <= ROW_HEIGHT + OFFSET:  # Місце, де слова "Місце" та "народження" - поруч
                         birth_title_y_loc = b if b <= p else p  # Розташування визначається за вищим словом (Дата)
-
+        if birth_title_y_loc:
+            self.pic = line_h(self.pic, birth_title_y_loc, C_R)
+            self.pic = d_text(self.pic, 5, birth_title_y_loc, f'birth place(y={birth_title_y_loc})', color=C_R)
         # Припинити, якщо не знайдено заголовок:
         if birth_title_y_loc is None:
             return None
 
         # Пошук закінчення секції:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if (y > birth_title_y_loc) and ((self.inline_title - OFFSET) < x < (self.inline_title + OFFSET)):
                 if not (str(t).startswith('Місце') | str(t).startswith('народження')):
                     next_section_y_loc = y
+                    self.pic = cv2.line(self.pic, (0, y), (PAGE_W, y), C_M, 1)
+                    self.pic = d_text(self.pic, 5, y-30, f'lim(y={y})', color=C_M)
                     break
 
         # Припинити, якщо не визначено межі секції:
@@ -314,9 +428,10 @@ class PersonProfile:
 
         # Збір слів з ділянки, яка містить значення місця народження:
         result_list = []
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if x > (self.inline_value - OFFSET) and (birth_title_y_loc - OFFSET) < y < (next_section_y_loc - OFFSET):
                 result_list.append(t)
+                self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
         if result_list:
             result_string = ' '.join(result_list)
             birth_value = self._clear_adr_line(result_string)
@@ -383,7 +498,7 @@ class PersonProfile:
         living_occur = []  # Позиції у яких зустрічається слово "Місце"
 
         # Визначення лінії (позиції по вертикалі) з якої починається запис адреси (заголовок):
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             place_word_present = re.search(r'(Місце)', t)
             if place_word_present:
                 place_occur.append(y)
@@ -395,26 +510,31 @@ class PersonProfile:
                 for liv in living_occur:
                     if abs(p-liv) <= ROW_HEIGHT + OFFSET:  # Місце, де слова "Місце" та "проживання" - поруч
                         adr_title_y_loc = liv if liv <= p else p  # Розташування визначається за вищим словом (Місце)
-
+        if adr_title_y_loc:
+            self.pic = line_h(self.pic, adr_title_y_loc, C_R)
+            self.pic = d_text(self.pic, 5, adr_title_y_loc, f'adr(y={adr_title_y_loc})', color=C_R)
         # Якщо не знайдено заголовок - припинення пошуку:
         if not adr_title_y_loc:
             return None
 
         # Пошук початку наступної секції (для обмеження пошуку поточної адреси) - заголовок з відступом inline_title:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if (y > adr_title_y_loc) and ((self.inline_title - OFFSET) < x < (self.inline_title + OFFSET)):
                 t = str(t)
                 if not (t.startswith('Місце') | t.startswith('проживання') | t.startswith('перебування') | (t == '')):
                     next_section_y_loc = y
+                    self.pic = cv2.line(self.pic, (0, y), (PAGE_W, y), C_M, 1)
+                    self.pic = d_text(self.pic, 5, y-30, f'lim(y={y})', color=C_M)
                     break
         if next_section_y_loc is None:
             return None
 
         # Накопичення слів у ділянці документу (визначена попередньо)
         result_list = []
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if x > (self.inline_value - OFFSET) and (adr_title_y_loc - OFFSET) < y < (next_section_y_loc - OFFSET):
                 result_list.append(t)
+                self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
         if result_list:
             result_string = ' '.join(result_list)
             adr_value = self._clear_adr_line(result_string)
@@ -431,7 +551,7 @@ class PersonProfile:
         section_ends = None
 
         # Прохід по всім словам та координатам для пошуку входжень ключових слів
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if section_starts and section_ends:
                 break
 
@@ -445,7 +565,7 @@ class PersonProfile:
                     section_ends = y
 
         if section_starts and not section_ends:
-            for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+            for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
                 if y > (section_starts + ROW_HEIGHT + OFFSET):
                     end_present = re.search(r'(Свідоцтво|Паспорт|Запит)', t)
                     if end_present:
@@ -465,7 +585,7 @@ class PersonProfile:
     def _get_blanks_ranges(self, section_start: int, section_end: int) -> Union[list, None]:
         """Формування списку пар координат по осі у - межі запису окремих паспортів"""
         kw_present = []  # координати по "у" у яких зустрічається слово "Номер"
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if (section_start - OFFSET) < y < (section_end + OFFSET):
                 if str(t).startswith('Номер'):
                     kw_present.append(y)
@@ -510,7 +630,7 @@ class PersonProfile:
                         break
 
         # проходження по всім записам з вибіркою атрибутів ДокументІД у вже відомих позиціях:
-        for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+        for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if lang == 'ukr':
                 if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
                     blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{0,4}[\d]{6}$)", t)
@@ -541,7 +661,7 @@ class PersonProfile:
                     office_y = y
         # Якщо знайдено заголовок органу видачі - вибрати весь текст до кінця секції документу:
         if office_y:
-            for i, (x, y, t) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'])):
+            for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
                 if ((office_y - OFFSET) < y < (y_max - OFFSET)) and ((OFFICE_VAL_X - OFFSET) < x):
                     office_lines.append(t)
         if office_lines:
