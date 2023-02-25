@@ -1,7 +1,7 @@
 """
 Project page: github.com/OlehOleinikov/easy_DMS
 License:      GNU GPL v.3
-Version:      0.4-beta (patch 23.02.23)
+Version:      0.4-beta (patch 24.02.23)
 """
 
 import os
@@ -18,9 +18,6 @@ from ms_word_editor import DocEditor
 from intro import intro_ascii
 from melody import melody_loop
 
-
-DEBUG_MODE = True  # some reports for developing purposes
-
 melody = melody_loop()  # beeps
 person_cards = []       # converted profiles
 errors_dict = {}        # errors
@@ -29,7 +26,7 @@ string_report = ''      # finish report
 # Intro:
 rprint('[#FF00FF]' + 'Project page: github.com/OlehOleinikov/easy_DMS\n'
                      'License:      GNU GPL v.3\n'
-                     'Version:      0.4-beta (patch 23.02.23)' + '[/#FF00FF]')
+                     'Version:      0.4-beta (patch 24.02.23)' + '[/#FF00FF]')
 rprint(intro_ascii)
 rprint('[#FF00FF]Scanning...\n')
 
@@ -124,8 +121,15 @@ try:
 except Exception as err:
     rprint(f'[#FF0000]MS Word save error - check permission or close file in other app - {err}\n')
 
-
-
-
+# The End pause:
 next(melody)
-input()
+end_word = input()
+
+# Generate debug images (*.png with OCR mesh):
+if end_word == 'plot':
+    ocr_plot_log = ''
+    for p_index in tqdm(range(len(person_cards)), bar_format='{l_bar}{bar:45}{r_bar}{bar:-45b}'):
+        person = person_cards[p_index]
+        person.save_ocr_plot()
+
+

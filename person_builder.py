@@ -10,20 +10,20 @@ import cv2
 
 OFFSET = 10             # можлива похибка при визначенні меж боксу слова (у пікселях)
 ROW_HEIGHT = (68+2)     # типова висота рядку у пікселях (для крокування)
-BLANK_MIN = 355         # межі значення номеру бланку по х
-BLANK_MAX = 635         # межі значення номеру бланку по х
-CREATED_MIN = 923       # межі значення дати видачі по х
-CREATED_MAX = 1202      # межі значення дати видачі по х
-EXPIRED_MIN = 1490      # початок значення "Дійсний до" по х
+BLANK_MIN = 345         # межі значення номеру бланку по х
+BLANK_MAX = 600         # межі значення номеру бланку по х
+CREATED_MIN = 900       # межі значення дати видачі по х
+CREATED_MAX = 1100      # межі значення дати видачі по х
+EXPIRED_MIN = 1450      # початок значення "Дійсний до" по х
 OFFICE_TIT_X = 183      # початок заголовку "Орган видачі" по х
-OFFICE_VAL_X = 465      # початок значення "Орган видачі" по х
+OFFICE_VAL_X = 450      # початок значення "Орган видачі" по х
 
 C_R = (0, 0, 255)
 C_G = (0, 200, 0)
 C_B = (255, 0, 0)
 C_M = (255, 0, 255)
 C_C = (255, 0, 255)
-C_Y = (0, 255, 255)
+C_Y = (0, 200, 200)
 
 DEF_COLOR = C_G
 TEXT_DEF_THICK = 1
@@ -141,7 +141,15 @@ class PersonProfile:
         self._get_pass_int()
         self._get_pass_ext()
         self.image = person_photo if person_photo else None
-        cv2.imwrite("result.png", self.pic)
+
+    def save_ocr_plot(self):
+        try:
+            cv2.imwrite(f"{self.code_tax}_result.png", self.pic)
+            return ''
+        except Exception as err:
+            return err
+
+
 
     def __str__(self):
         desc_text = f'{self.name_full}, {self.dob} р.н.:' \
@@ -415,10 +423,10 @@ class PersonProfile:
 
         # Пошук закінчення секції:
         for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
-            if (y > birth_title_y_loc) and ((self.inline_title - OFFSET) < x < (self.inline_title + OFFSET)):
-                if not (str(t).startswith('Місце') | str(t).startswith('народження')):
+            if (y > birth_title_y_loc) and ((self.inline_title - OFFSET) < x < (self.inline_value - OFFSET*5)):
+                if not (str(t).startswith('Місце') | str(t).startswith('народження') | (not bool(t))):
                     next_section_y_loc = y
-                    self.pic = cv2.line(self.pic, (0, y), (PAGE_W, y), C_M, 1)
+                    self.pic = cv2.line(self.pic, (0, y - OFFSET*2), (PAGE_W, y - OFFSET*2), C_M, 1)
                     self.pic = d_text(self.pic, 5, y-30, f'lim(y={y})', color=C_M)
                     break
 
@@ -429,7 +437,7 @@ class PersonProfile:
         # Збір слів з ділянки, яка містить значення місця народження:
         result_list = []
         for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
-            if x > (self.inline_value - OFFSET) and (birth_title_y_loc - OFFSET) < y < (next_section_y_loc - OFFSET):
+            if x > (self.inline_value - OFFSET) and (birth_title_y_loc - OFFSET) < y < (next_section_y_loc - OFFSET*2):
                 result_list.append(t)
                 self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
         if result_list:
@@ -508,7 +516,7 @@ class PersonProfile:
         for p in place_occur:
             if not adr_title_y_loc:
                 for liv in living_occur:
-                    if abs(p-liv) <= ROW_HEIGHT + OFFSET:  # Місце, де слова "Місце" та "проживання" - поруч
+                    if abs(p-liv) <= ROW_HEIGHT - 5:  # Місце, де слова "Місце" та "проживання" - поруч
                         adr_title_y_loc = liv if liv <= p else p  # Розташування визначається за вищим словом (Місце)
         if adr_title_y_loc:
             self.pic = line_h(self.pic, adr_title_y_loc, C_R)
@@ -523,7 +531,7 @@ class PersonProfile:
                 t = str(t)
                 if not (t.startswith('Місце') | t.startswith('проживання') | t.startswith('перебування') | (t == '')):
                     next_section_y_loc = y
-                    self.pic = cv2.line(self.pic, (0, y), (PAGE_W, y), C_M, 1)
+                    self.pic = cv2.line(self.pic, (0, y - OFFSET - 2), (PAGE_W, y - OFFSET - 2), C_M, 1)
                     self.pic = d_text(self.pic, 5, y-30, f'lim(y={y})', color=C_M)
                     break
         if next_section_y_loc is None:
@@ -578,6 +586,10 @@ class PersonProfile:
             if section_starts > section_ends:
                 return None, None
             else:
+                self.pic = line_h(self.pic, section_starts, C_Y)
+                self.pic = d_text(self.pic, 5, section_starts+40, f's_start(y={section_starts})', color=C_Y)
+                self.pic = line_h(self.pic, section_ends, C_Y)
+                self.pic = d_text(self.pic, 5, section_ends-5, f's_end(y={section_ends})', color=C_Y)
                 return section_starts, section_ends
         else:
             return None, None
@@ -589,6 +601,8 @@ class PersonProfile:
             if (section_start - OFFSET) < y < (section_end + OFFSET):
                 if str(t).startswith('Номер'):
                     kw_present.append(y)
+                    self.pic = d_elem(self.pic, x, y, h, w, color=C_M, desc=f'pass here(y={y})')
+                    self.pic = line_h(self.pic, y, C_M)
         if not kw_present:
             return None
 
@@ -622,34 +636,87 @@ class PersonProfile:
 
         # якщо тип документу потребує розпізнання англійських літер - пошук номеру бланку:
         if lang == 'eng':
-            for i, (x, y, t) in enumerate(zip(self.data_eng['left'], self.data_eng['top'], self.data_eng['text'])):
+            for i, (x, y, t, h, w, c) in enumerate(zip(self.data_eng['left'], self.data_eng['top'], self.data_eng['text'], self.data_eng['height'], self.data_eng['width'], self.data_eng['conf'])):
                 if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
-                    blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{0,5}[\d]{6}$)", t)
+                    blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{7,10}$)", t)
                     if blank_present:
                         blank = blank_present.group(1)
+                        self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
+                        self.pic = d_rect(self.pic,
+                                          x=BLANK_MIN - OFFSET,
+                                          y=y_min - OFFSET,
+                                          h=(y_min + OFFSET) - (y_min - OFFSET),
+                                          w=BLANK_MAX - BLANK_MIN,
+                                          color=C_B, line=1)
+                        self.pic = d_text(self.pic,
+                                          BLANK_MIN - 25,
+                                          y_min + 13,
+                                          'search_area',
+                                          color=C_B, thick=1,
+                                          size=0.4)
                         break
 
         # проходження по всім записам з вибіркою атрибутів ДокументІД у вже відомих позиціях:
         for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
             if lang == 'ukr':
                 if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((BLANK_MIN - OFFSET) < x < (BLANK_MAX + OFFSET)):
-                    blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{0,4}[\d]{6}$)", t)
+                    blank_present = re.search(r"([A-ZА-Я0-9ІЇЄ]{7,10}$)", t)
                     if blank_present:
                         blank = blank_present.group(1)
+                        self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
+                        self.pic = d_rect(self.pic,
+                                          x=BLANK_MIN - OFFSET,
+                                          y=y_min - OFFSET,
+                                          h=(y_min + OFFSET) - (y_min - OFFSET),
+                                          w=BLANK_MAX - BLANK_MIN,
+                                          color=C_B, line=1)
+                        self.pic = d_text(self.pic,
+                                          BLANK_MIN - 25,
+                                          y_min + 13,
+                                          'search_area',
+                                          color=C_B, thick=1,
+                                          size=0.4)
 
             # Дата видачі:
             if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((CREATED_MIN - OFFSET) < x < (CREATED_MAX + OFFSET)):
                 created_present = re.search(r"(\d{2}.\d{2}.\d{4})", t)
                 if created_present:
                     date_created = created_present.group(1)
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
+                    self.pic = d_rect(self.pic,
+                                      x=CREATED_MIN - OFFSET,
+                                      y=y_min - OFFSET,
+                                      h=(y_min + OFFSET) - (y_min - OFFSET),
+                                      w=CREATED_MAX - CREATED_MIN,
+                                      color=C_B, line=1)
+                    self.pic = d_text(self.pic,
+                                      CREATED_MIN - 25,
+                                      y_min + 13,
+                                      'search_area',
+                                      color=C_B, thick=1,
+                                      size=0.4)
             # Дійсний до:
             if ((y_min - OFFSET) < y < (y_min + OFFSET)) and ((EXPIRED_MIN - OFFSET) < x):
                 expired_present = re.search(r"(\d{2}.\d{2}.\d{4})", t)
                 if expired_present:
                     date_expired = expired_present.group(1)
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
+                    self.pic = d_rect(self.pic,
+                                      x=EXPIRED_MIN - OFFSET,
+                                      y=y_min - OFFSET,
+                                      h=(y_min + OFFSET) - (y_min - OFFSET),
+                                      w=PAGE_W - EXPIRED_MIN - 10,
+                                      color=C_B, line=1)
+                    self.pic = d_text(self.pic,
+                                      EXPIRED_MIN - 25,
+                                      y_min + 13,
+                                      'search_area',
+                                      color=C_B, thick=1,
+                                      size=0.4)
                 # Статус обмеження (недійсний/необмежений):
                 spec_status = re.search(r"(недійсним)|(необмежений)", t)
                 if spec_status:
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
                     if spec_status.group(0) == 'недійсним':
                         expired_status = 'недійсний'
                     elif spec_status.group(0) == 'необмежений':
@@ -659,11 +726,33 @@ class PersonProfile:
                 office_title_present = re.search(r"(Орган)", t)
                 if office_title_present:
                     office_y = y
+                    self.pic = d_elem(self.pic, x, y, h, w, C_M, desc=f'({x};{y})')
+                    self.pic = d_rect(self.pic,
+                                      x=EXPIRED_MIN - OFFSET,
+                                      y=y_min - OFFSET,
+                                      h=(y_min + OFFSET) - (y_min - OFFSET),
+                                      w=PAGE_W - EXPIRED_MIN - 10,
+                                      color=C_B, line=1)
+                    self.pic = d_text(self.pic,
+                                      EXPIRED_MIN - 25,
+                                      y_min + 13,
+                                      'search_area',
+                                      color=C_B, thick=1,
+                                      size=0.4)
+
         # Якщо знайдено заголовок органу видачі - вибрати весь текст до кінця секції документу:
         if office_y:
+            self.pic = d_rect(self.pic,
+                              OFFICE_VAL_X,
+                              office_y - OFFSET,
+                              (y_max - OFFSET-2) - (office_y - OFFSET),
+                              PAGE_W - OFFICE_VAL_X,
+                              color=C_B, line=1)
+            self.pic = d_text(self.pic, OFFICE_VAL_X - 10, office_y + 13, 'search_area', color=C_B, thick=1, size=0.4)
             for i, (x, y, t, h, w, c) in enumerate(zip(self.data['left'], self.data['top'], self.data['text'], self.data['height'], self.data['width'], self.data['conf'])):
                 if ((office_y - OFFSET) < y < (y_max - OFFSET)) and ((OFFICE_VAL_X - OFFSET) < x):
                     office_lines.append(t)
+                    self.pic = d_elem(self.pic, x, y, h, w, C_G, desc=f'({x};{y})')
         if office_lines:
             office_string = ' '.join(office_lines)
             office_string = office_string.strip()
