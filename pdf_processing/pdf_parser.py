@@ -1,29 +1,19 @@
 """
 Модуль перетворення PDF до тексту за допомогою OCR
 """
-
-import warnings
-import io
 import re
-from rich import print as rprint
 from typing import Tuple
 
 import numpy as np
 import cv2
 import fitz
 
-from pdfminer.converter import PDFPageAggregator, TextConverter
-from pdfminer.layout import LTTextBox, LAParams
-from pdfminer.pdfdocument import PDFDocument
-from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-from pdfminer.pdfpage import PDFPage
-from pdfminer.pdfparser import PDFParser
-
 import pytesseract
 from pytesseract import Output
 
 pytesseract.pytesseract.tesseract_cmd = r"full path to the exe file"
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = r".\tess\tesseract.exe"
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
 def ocr_pdf_to_dict(file: str) -> Tuple[dict, dict]:
@@ -85,68 +75,6 @@ def _convert_pdf_to_image(file: str) -> bytes:
     pix = doc[0].get_pixmap(matrix=mat)  # render page to an image
     pix_io = pix.pil_tobytes(format="PNG", optimize=True)
     return pix_io
-
-
-def get_text_data(file) -> str:
-    """
-    Отримання даних PDF файлу у вигляді стрінги з розділювачами нового рядку
-    (очищення від 1-2 символьних рідків) DeprecationWarning
-    """
-    warnings.warn("Через замішування тексту всередині блоків методи process_page() не будуть використовуватись. "
-                  "Все опрацювання замінено на OCR", DeprecationWarning)
-    output_string = io.StringIO()
-    with open(file, 'rb') as in_file:
-        parser = PDFParser(in_file)
-        doc = PDFDocument(parser)
-        rsrcmgr = PDFResourceManager()
-        device = TextConverter(rsrcmgr, output_string, laparams=LAParams())
-        interpreter = PDFPageInterpreter(rsrcmgr, device)
-        for page in PDFPage.create_pages(doc):
-            interpreter.process_page(page)
-
-    pdf_text = output_string.getvalue()
-    splitted_lines_pdf = pdf_text.split('\n')
-    clean_string = [str(x).strip() for x in splitted_lines_pdf if len(x.strip()) > 2]
-    data = '\n'.join(clean_string)
-    # with open(f"Output_{file}.txt", "w") as text_file:
-    #     text_file.write(data)
-    return data
-
-
-def show_pdf_text_localization(file):
-    """
-    Збір та вивід текстових записів з PDF та відображення розмірів блоків (положення на сторінці).
-    Метод не придатний для повноцінного опрацювання - текст замішується між блоками.
-    DeprecationWarning - для повного опрацювання використовується OCR
-    """
-    warnings.warn("Через замішування тексту всередині блоків методи process_page() не будуть використовуватись. "
-                  "Все опрацювання замінено на OCR", DeprecationWarning)
-    fp = open(file, 'rb')
-    rsrcmgr = PDFResourceManager()
-    laparams = LAParams()
-    device = PDFPageAggregator(rsrcmgr, laparams=laparams)
-    interpreter = PDFPageInterpreter(rsrcmgr, device)
-    pages = PDFPage.get_pages(fp)
-
-    for page in pages:
-        interpreter.process_page(page)
-        layout = device.get_result()
-        for l in layout:
-            if isinstance(l, LTTextBox):
-                x_min, y_max, y_min, x_max, text = l.bbox[0], l.bbox[3], l.bbox[1], l.bbox[2],  l.get_text()
-                if len(text) > 2:
-
-                    res_text = []
-                    for part in text.split('\n'):
-                        if len(part) > 2:
-                            res_text.append(part)
-                    res_text = '\n'.join(res_text)
-
-                    if res_text:
-                        print('--------------------------------------------')
-                        print(f'height: {round(y_min)}-{round(y_max)} (size: {round(abs(y_min - y_max))})')
-                        print(f'width:  {round(x_min)}-{round(x_max)} (size: {round(abs(x_min - x_max))})')
-                        rprint('[red]' + res_text + '[/red]')
 
 
 def get_cv_image(pdf_file):

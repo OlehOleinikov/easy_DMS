@@ -8,7 +8,8 @@ from docx.enum.style import WD_STYLE_TYPE
 from docx.shared import Pt, RGBColor, Cm
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
-from person_builder import PersonProfile, DocumentId
+from person_builder import PersonProfile
+from cls_document import DocumentId
 
 
 class _DocEditorEmpty:
@@ -120,6 +121,12 @@ class DocEditor(_DocEditorEmpty):
             p_adr = self.document.add_paragraph(f'Засіб зв\'язку ', style='text_base')
             p_adr.add_run(card.phone, style='text_red').bold = True
             p_adr.add_run(" (станом на момент перевірки перебуває на зв'язку).")
+
+        if card.certificate_of_birth:
+            p_int_pass = self.document.add_paragraph(f'', style='text_base')
+            p_int_pass.add_run(f'Свідоцтво про народження:').bold = True
+            for passport in card.certificate_of_birth:
+                self._add_pass(passport)
 
         if card.pass_internal:
             p_int_pass = self.document.add_paragraph(f'', style='text_base')

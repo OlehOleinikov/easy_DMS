@@ -131,6 +131,11 @@ dmypy.json
 # Custom
 .idea/
 /datasets
+/easyDMS release
+/tess
+/main.build
+/main.dist
+/main.onefile-build
 *.pdf
 *.docx
 *.png

@@ -3,7 +3,6 @@ Project page: github.com/OlehOleinikov/easy_DMS
 License:      GNU GPL v.3
 Version:      0.4-beta (patch 24.02.23)
 """
-
 import os
 
 from tqdm import tqdm
@@ -69,12 +68,12 @@ for file_index in tqdm(range(len(files_in_dir)), bar_format='{l_bar}{bar:45}{r_b
         person_photo = None
 
     # Convert data to instance
-    # try:
+    #try:
     cur_person = PersonProfile(data_ukr, data_eng, person_photo, cur_file)
     person_cards.append(cur_person)
     status = True
-    # except Exception as err:
-    #     errors_dict.update({cur_file: f'Помилка збору відомостей: {str(err)}'})
+    #except Exception as err:
+        #errors_dict.update({cur_file: f'Помилка збору відомостей: {str(err)}'})
 
     if status:
         string_report += f"[#00FF00]   OK   [#FF00FF]file: {cur_file}\n"

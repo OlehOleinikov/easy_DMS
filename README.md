@@ -12,11 +12,15 @@ Successful conversion of documents was achieved by converting the content of the
 
 ## OCR processing
 
+The tesseract module is used for these purposes. First of all, the PDF file is converted to cv2 format (image array). As a result of image processing, a dictionary is returned with coordinates of defined blocks and text values. Heading lines with some offset are defined for correct text selection.
+
 ### PDF overview
 
 ![](demo/p_5.png)
 
 ### Single row fields parsing
+
+The first attribute located on the header line is extracted. The 'y' coordinate (with offsets) is used to determine the extraction limits. The expected placement of the attribute itself is limited by the 'x' coordinate. Accumulation of attributes is provided by the PersonProfile class
 
 ![](demo/ocr1.png)
 
