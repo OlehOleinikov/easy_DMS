@@ -11,10 +11,33 @@ import fitz
 import pytesseract
 from pytesseract import Output
 
+from pdfminer.converter import TextConverter
+from pdfminer.layout import LAParams
+from pdfminer.pdfdocument import PDFDocument
+from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+from pdfminer.pdfpage import PDFPage
+from pdfminer.pdfparser import PDFParser
+from pdfminer.high_level import extract_pages
+from pdfminer.layout import LTTextContainer
+
 pytesseract.pytesseract.tesseract_cmd = r"full path to the exe file"
 pytesseract.pytesseract.tesseract_cmd = r".\tess\tesseract.exe"
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
+
+def pdfminer_to_dict(file: str) -> Tuple[dict, dict]:
+    text = []
+    left = []
+    top = []
+    width = []
+    height = []
+    conf = []  # rudiment from ocr method
+    for page_layout in extract_pages("anketa_9576427.pdf"):
+        for element in page_layout:
+            if isinstance(element, LTTextContainer):
+                text.append(element.get_text())
+                left.append(element.x0)
+                top.append()
 
 def ocr_pdf_to_dict(file: str) -> Tuple[dict, dict]:
     """
